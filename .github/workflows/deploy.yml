@@ -14,6 +14,7 @@ jobs:
 
     env:
       AWS_REGION: ap-southeast-1
+      APP_IMAGE: ghcr.io/${{ github.repository }}:latest
 
     steps:
       - name: Checkout Code
@@ -27,14 +28,16 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and Push Docker Image
         run: |
-          IMAGE="ghcr.io/${{ github.repository }}:latest"
-          docker build -t $IMAGE .
-          docker push $IMAGE
-          echo "app_image=$IMAGE" >> $GITHUB_ENV
+          docker build -t ${{ env.APP_IMAGE }} .
+          docker push ${{ env.APP_IMAGE }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -45,4 +48,4 @@ jobs:
 
       - name: Terraform Apply
         working-directory: terraform
-        run: terraform apply -auto-approve -var="app_image=${{ env.app_image }}"
+        run: terraform apply -auto-approve -var="app_image=${{ env.APP_IMAGE }}"

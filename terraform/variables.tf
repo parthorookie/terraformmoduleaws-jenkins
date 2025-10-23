@@ -1,7 +1,10 @@
 variable "aws_region" {
-  default = "ap-southeast-1"
+  description = "AWS region"
+  type        = string
+  default     = "ap-southeast-1"
 }
 
 variable "app_image" {
-  description = "Docker image to deploy"
+  description = "Docker image to run"
+  type        = string
 }

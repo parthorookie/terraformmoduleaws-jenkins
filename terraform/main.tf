@@ -97,7 +97,7 @@ resource "aws_security_group" "web_sg" {
 
 # EC2 Instance - FIXED VERSION
 resource "aws_instance" "web" {
-  ami           = "ami-0c802847a7dd848c0"  # Amazon Linux 2023 in ap-southeast-1
+  ami           = "ami-0c802847a7dd848c0"
   instance_type = "t3.micro"
   
   # FIX: Use vpc_security_group_ids instead of security_groups
@@ -216,7 +216,7 @@ resource "aws_wafv2_web_acl_association" "assoc" {
   web_acl_arn  = aws_wafv2_web_acl.waf.arn
 }
 
-# Output
+# Output - ONLY ONE DEFINITION
 output "alb_dns" {
   value = aws_lb.alb.dns_name
 }

@@ -1,80 +1,36 @@
+# terraform/main.tf
 provider "aws" {
-  region = var.aws_region
+  region = "ap-southeast-1"
 }
 
-# VPC
-resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_support   = true
-  enable_dns_hostnames = true
+# Get default VPC and subnets
+data "aws_vpc" "default" {
+  default = true
+}
 
-  tags = {
-    Name = "waf-demo-vpc"
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+
+  filter {
+    name   = "default-for-az"
+    values = ["true"]
   }
 }
 
-# Subnets
-resource "aws_subnet" "public_a" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = "${var.aws_region}a"
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "public-a"
-  }
+# Create a unique name using timestamp to avoid conflicts
+locals {
+  timestamp = regex_replace(timestamp(), "[- UTC:]", "")
+  prefix    = "wafdemo-${local.timestamp}"
 }
 
-resource "aws_subnet" "public_b" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.2.0/24"
-  availability_zone       = "${var.aws_region}b"
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "public-b"
-  }
-}
-
-# Internet Gateway
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "waf-demo-igw"
-  }
-}
-
-# Route Table
-resource "aws_route_table" "rt" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
-  }
-
-  tags = {
-    Name = "waf-demo-rt"
-  }
-}
-
-# Route Table Associations
-resource "aws_route_table_association" "a" {
-  subnet_id      = aws_subnet.public_a.id
-  route_table_id = aws_route_table.rt.id
-}
-
-resource "aws_route_table_association" "b" {
-  subnet_id      = aws_subnet.public_b.id
-  route_table_id = aws_route_table.rt.id
-}
-
-# Security Group
-resource "aws_security_group" "web_sg" {
-  name        = "web-sg"
-  description = "Allow HTTP traffic"
-  vpc_id      = aws_vpc.main.id
+# Security Group with unique name
+resource "aws_security_group" "web" {
+  name_prefix = "${local.prefix}-sg"
+  description = "Security group for WAF demo"
+  vpc_id      = data.aws_vpc.default.id
 
   ingress {
     from_port   = 80
@@ -91,20 +47,22 @@ resource "aws_security_group" "web_sg" {
   }
 
   tags = {
-    Name = "web-sg"
+    Name = "${local.prefix}-sg"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
-# EC2 Instance - FIXED VERSION
+# EC2 Instance
 resource "aws_instance" "web" {
-  ami           = "ami-0c802847a7dd848c0"
-  instance_type = "t3.micro"
+  ami           = "ami-0c802847a7dd848c0" # Amazon Linux 2023 in ap-southeast-1
+  instance_type = "t2.micro"
   
-  # FIX: Use vpc_security_group_ids instead of security_groups
-  vpc_security_group_ids = [aws_security_group.web_sg.id]
-  subnet_id              = aws_subnet.public_a.id
+  vpc_security_group_ids = [aws_security_group.web.id]
+  subnet_id              = data.aws_subnets.default.ids[0]
   
-  # FIX: Use user_data_base64 to avoid warning
   user_data_base64 = base64encode(<<-EOF
     #!/bin/bash
     yum update -y
@@ -116,33 +74,31 @@ resource "aws_instance" "web" {
   )
 
   tags = {
-    Name = "waf-demo-ec2"
+    Name = "${local.prefix}-ec2"
   }
-
-  depends_on = [aws_internet_gateway.igw]
 }
 
-# ALB
+# ALB with unique name
 resource "aws_lb" "alb" {
-  name               = "waf-demo-alb"
+  name               = "${local.prefix}-alb"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.web_sg.id]
-  subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+  security_groups    = [aws_security_group.web.id]
+  subnets            = slice(data.aws_subnets.default.ids, 0, 2) # Use first 2 subnets
 
   enable_deletion_protection = false
 
   tags = {
-    Name = "waf-demo-alb"
+    Name = "${local.prefix}-alb"
   }
 }
 
-# Target Group
+# Target Group with unique name
 resource "aws_lb_target_group" "tg" {
-  name     = "waf-demo-tg"
+  name     = "${local.prefix}-tg"
   port     = 80
   protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
+  vpc_id   = data.aws_vpc.default.id
 
   health_check {
     path                = "/"
@@ -150,6 +106,10 @@ resource "aws_lb_target_group" "tg" {
     timeout             = 5
     healthy_threshold   = 2
     unhealthy_threshold = 2
+  }
+
+  tags = {
+    Name = "${local.prefix}-tg"
   }
 }
 
@@ -172,10 +132,10 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# WAF Web ACL
+# WAF Web ACL with unique name
 resource "aws_wafv2_web_acl" "waf" {
-  name        = "waf-demo"
-  description = "Protects ALB"
+  name        = "${local.prefix}-waf"
+  description = "WAF for demo application"
   scope       = "REGIONAL"
 
   default_action {
@@ -183,7 +143,7 @@ resource "aws_wafv2_web_acl" "waf" {
   }
 
   rule {
-    name     = "AWS-AWSManagedRulesCommonRuleSet"
+    name     = "AWSManagedRulesCommonRuleSet"
     priority = 1
 
     override_action {
@@ -199,15 +159,19 @@ resource "aws_wafv2_web_acl" "waf" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "commonRules"
+      metric_name                = "AWSManagedRulesCommonRuleSet"
       sampled_requests_enabled   = true
     }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "wafDemo"
+    metric_name                = "${local.prefix}-waf"
     sampled_requests_enabled   = true
+  }
+
+  tags = {
+    Name = "${local.prefix}-waf"
   }
 }
 
@@ -220,4 +184,8 @@ resource "aws_wafv2_web_acl_association" "assoc" {
 # Output
 output "alb_dns" {
   value = aws_lb.alb.dns_name
+}
+
+output "instance_ip" {
+  value = aws_instance.web.public_ip
 }

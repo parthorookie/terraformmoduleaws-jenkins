@@ -11,6 +11,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      packages: write  # ← ADD THIS LINE
 
     env:
       AWS_REGION: ap-southeast-1
@@ -35,7 +36,7 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |
-          # Convert to lowercase to avoid errors
+          # Automatic lowercase conversion for reliability
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           IMAGE="ghcr.io/${REPO_LOWER}:latest"
           echo "Building Docker image: $IMAGE"

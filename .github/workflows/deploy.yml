@@ -14,7 +14,6 @@ jobs:
 
     env:
       AWS_REGION: ap-southeast-1
-      APP_IMAGE: ghcr.io/rookiep/waf-gitops:latest
 
     steps:
       - name: Checkout Code
@@ -36,8 +35,13 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |
-          docker build -t ${{ env.APP_IMAGE }} .
-          docker push ${{ env.APP_IMAGE }}
+          # Convert to lowercase to avoid errors
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE="ghcr.io/${REPO_LOWER}:latest"
+          echo "Building Docker image: $IMAGE"
+          docker build -t $IMAGE .
+          docker push $IMAGE
+          echo "APP_IMAGE=$IMAGE" >> $GITHUB_ENV
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -48,4 +52,4 @@ jobs:
 
       - name: Terraform Apply
         working-directory: terraform
-        run: terraform apply -auto-approve -var="app_image=${{ env.APP_IMAGE }}"
+        run: terraform apply -auto-approve -var="app_image=$APP_IMAGE"

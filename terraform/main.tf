@@ -78,7 +78,7 @@ resource "aws_security_group" "web_sg" {
 # EC2 Instance
 resource "aws_instance" "web" {
   ami           = "ami-0c802847a7dd848c0" # Amazon Linux 2023 in ap-southeast-1
-  instance_type = "t3.micro"
+  instance_type = "t2.micro"
   
   vpc_security_group_ids = [aws_security_group.web_sg.id]
   subnet_id              = data.aws_subnets.default.ids[0]

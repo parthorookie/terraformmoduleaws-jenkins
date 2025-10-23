@@ -104,7 +104,8 @@ resource "aws_instance" "web" {
   vpc_security_group_ids = [aws_security_group.web_sg.id]
   subnet_id              = aws_subnet.public_a.id
   
-  user_data = base64encode(<<-EOF
+  # FIX: Use user_data_base64 to avoid warning
+  user_data_base64 = base64encode(<<-EOF
     #!/bin/bash
     yum update -y
     amazon-linux-extras install docker -y
@@ -216,7 +217,7 @@ resource "aws_wafv2_web_acl_association" "assoc" {
   web_acl_arn  = aws_wafv2_web_acl.waf.arn
 }
 
-# Output - ONLY ONE DEFINITION
+# Output
 output "alb_dns" {
   value = aws_lb.alb.dns_name
 }

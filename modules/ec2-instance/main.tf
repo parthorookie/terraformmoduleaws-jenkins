@@ -1,8 +1,8 @@
 resource "aws_instance" "this" {
   ami           = var.ami
   instance_type = var.instance_type
-  key_name      = var.key_name
   subnet_id     = var.subnet_id
+  key_name      = var.key_name  # Optional; add if using SSH key
 
   tags = merge(
     var.tags,
@@ -10,4 +10,8 @@ resource "aws_instance" "this" {
       Name = var.name
     }
   )
+}
+
+output "public_ip" {
+  value = aws_instance.this.public_ip
 }

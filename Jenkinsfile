@@ -7,12 +7,16 @@ pipeline {
         AWS_DEFAULT_REGION    = "ap-south-1"
     }
 
+    parameters {
+        booleanParam(name: 'APPLY', defaultValue: false, description: 'Run Terraform Apply?')
+    }
+
     stages {
 
         stage('Checkout Source Code') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/parthorookie/terraformmoduleaws-jenkins.git'
+                    url: 'https://github.com/parthorookie/terraformmodule-aws.git'
             }
         }
 
@@ -41,6 +45,11 @@ pipeline {
         }
 
         stage('Terraform Apply') {
+            when {
+                expression {
+                    return params.APPLY == true
+                }
+            }
             steps {
                 sh '''
                     terraform apply -auto-approve tfplan
@@ -48,3 +57,4 @@ pipeline {
             }
         }
     }
+}
